@@ -5,11 +5,13 @@
   border: none;
   font: bold 14px/14px "Courier New",courier,monospace;
   color: dimgray;
-  z-index: 32766;
-  background-color: rgba(255, 255, 255, 0.6);
+  background-color: rgba(255, 255, 255, 0.8);
   flex: none;
   width: 10px;
-  height: 12px;
+  height: 13px;
   text-align: center;
+  text-indent: 0;
+  text-decoration: none;
+  text-shadow: none;
   border-radius: 2px;
 }

@@ -4,13 +4,18 @@
 
 var ID_EXTENSION = chrome.i18n.getMessage('@@extension_id');
 
+function isModifierKey(k) {
+  return k == KeyEvent.DOM_VK_SHIFT || k == KeyEvent.DOM_VK_ALT || k == KeyEvent.DOM_VK_CONTROL || k == KeyEvent.DOM_VK_META;
+}
+
 /*
  * key click event
  */
 (function () {
   var lastKeyStroke;
   $(window).keydown(function (e) {
-    if (!e.originalEvent.repeat) {
+    if (!e.originalEvent.repeat
+        && (!lastKeyStroke || isModifierKey(lastKeyStroke.which) || !isModifierKey(e.which))) {
       lastKeyStroke = e;
     }
   });
@@ -34,7 +39,10 @@ var ID_EXTENSION = chrome.i18n.getMessage('@@extension_id');
 /*
  * state management
  */
+var MAX_NUM_SHORTCUTS = 36;
 var state = 'start';
+var scHist = $();
+var internalClicking = false;
 
 function toStart() {
   if (state == 'start') {
@@ -42,6 +50,7 @@ function toStart() {
   }
   if (state == 'shortcutting') {
     removeShortcuts();
+    scHist = $();
   }
   state = 'start';
 }
@@ -51,49 +60,61 @@ function toShortCutting() {
     return;
   }
   if (state == 'start') {
-    createShortcuts(searchAllClickablesInView());
+    scHist = searchClickablesInView().filter(createShortcutFilter(MAX_NUM_SHORTCUTS));
+    if (!scHist.length) {
+      return;
+    }
+    createShortcuts(scHist);
   }
   state = 'shortcutting';
+}
+
+function createShortcutFilter(length) {
+  return function (i, elem) {
+    if (length && i < length) {
+      return true;
+    }
+    $(elem).removeData('contentMarginTopToBorder').removeData('contentMarginLeftToBorder');
+    return false;
+  }
+}
+
+function reShortcutting() {
+  if (state != 'shortcutting') {
+    return;
+  }
+  removeShortcuts();
+  var all = searchClickablesInView().filter(createShortcutFilter(scHist.length + MAX_NUM_SHORTCUTS));
+  var newClickables = all.not(scHist);
+  all = all.not(newClickables);
+  if (!newClickables.length) {
+    all.filter(createShortcutFilter());
+    toStart();
+    return;
+  }
+  var lack = MAX_NUM_SHORTCUTS - newClickables.length;
+  if (lack > 0) {
+    newClickables = $($.merge(newClickables.get(), all.filter(createShortcutFilter(lack)).get()));
+  } else {
+    all.filter(createShortcutFilter());
+    if (lack) {
+      newClickables = newClickables.filter(createShortcutFilter(MAX_NUM_SHORTCUTS));
+    }
+  }
+  scHist = scHist.add(newClickables);
+  createShortcuts(newClickables);
 }
 
 /*
  * key event handlers
  */
-$(window).on('keyclick', function (e) {
-  var consumed = false;
-  if (state == 'start') {
-    switch (e.which) {
-      case KeyEvent.DOM_VK_SHIFT:
-        if (!e.ctrlKey && !e.altKey && !e.metaKey) {
-          toShortCutting();
-          consumed = true;
-        }
-        break;
-    }
-  } else if (state == 'shortcutting') {
-    switch (e.which) {
-      case KeyEvent.DOM_VK_SHIFT:
-        if (!e.ctrlKey && !e.altKey && !e.metaKey) {
-          toStart();
-          consumed = true;
-        }
-        break;
-    }
-  }
-  if (consumed) {
-    e.preventDefault();
-    e.stopPropagation();
-  }
-});
 
 (function () {
-  var clickables;
-
-  function getCharFromVK(k) {
-    if (k >= KeyEvent.DOM_VK_0 && k <= KeyEvent.DOM_VK_9) {
+  function getCharFromVK(k, shiftKey) {
+    if (!shiftKey && k >= KeyEvent.DOM_VK_0 && k <= KeyEvent.DOM_VK_9) {
       return String.fromCharCode(k - KeyEvent.DOM_VK_0 + '0'.charCodeAt(0));
     }
-    if (k >= KeyEvent.DOM_VK_NUMPAD0 && k <= KeyEvent.DOM_VK_NUMPAD9) {
+    if (!shiftKey && k >= KeyEvent.DOM_VK_NUMPAD0 && k <= KeyEvent.DOM_VK_NUMPAD9) {
       return String.fromCharCode(k - KeyEvent.DOM_VK_NUMPAD0 + '0'.charCodeAt(0));
     }
     if (k >= KeyEvent.DOM_VK_A && k <= KeyEvent.DOM_VK_Z) {
@@ -102,49 +123,78 @@ $(window).on('keyclick', function (e) {
     return undefined;
   }
 
-  $(window).keydown(function (e) {
+  $('body').keydown(function (e) {
+    if (isModifierKey(e.which)) {
+      return;
+    }
     var consumed = false;
     if (state == 'shortcutting') {
-      if (e.which == KeyEvent.DOM_VK_TAB) {
-        consumed = true;
-      } else if (e.which != KeyEvent.DOM_VK_SHIFT) {
-        if (!e.ctrlKey && !e.altKey && !e.metaKey) {
-          var c = getCharFromVK(e.which);
+      var action = true;
+      if (!e.ctrlKey && !e.altKey && !e.metaKey) {
+        if (e.which == KeyEvent.DOM_VK_ESCAPE) {
+          if (!e.shiftKey) {
+            consumed = true;
+          }
+        } else if (e.which == KeyEvent.DOM_VK_TAB) {
+          if (!e.shiftKey) {
+            reShortcutting();
+            consumed = true;
+            action = false;
+          }
+        } else {
+          var c = getCharFromVK(e.which, e.shiftKey);
           if (c) {
-            clickables = $(getShortcutSelectorByChar()).prev();
+            var clickable = $(getShortcutSelectorByChar(c)).prev();
+            clickable.focus();
+            if (clickable.prop('href') || clickable.attr('href')) {
+              internalClicking = true;
+              clickable.get(0).click();
+              internalClicking = false;
+            }
+            consumed = true;
+            action = false;
+            reShortcutting();
           }
         }
+      }
+      if (action) {
         toStart();
       }
     }
     if (consumed) {
       e.preventDefault();
       e.stopPropagation();
-    }
-  });
-  $(window).keypress(function (e) {
-    var consumed = false;
-    if (clickables && clickables.length
-        && !e.ctrlKey && !e.altKey && !e.metaKey
-        && /[0-9a-zA-Z]/.test(String.fromCharCode(e.which))) {
-      clickables.focus();
-      if (clickables.prop('href') || clickables.attr('href')) {
-        clickables.get(0).click();
-      }
-      consumed = true;
-    }
-    clickables = undefined;
-    if (consumed) {
-      e.preventDefault();
-      e.stopPropagation();
+      return false;
     }
   });
 })();
 
+$(window).on('keyclick', function (e) {
+  if (e.ctrlKey || e.altKey || e.metaKey) {
+    return;
+  }
+  var consumed = false;
+  if (state == 'start') {
+    if (e.which == KeyEvent.DOM_VK_SHIFT) {
+      toShortCutting();
+      consumed = true;
+    }
+  } else if (state == 'shortcutting') {
+    if (e.which == KeyEvent.DOM_VK_SHIFT) {
+      toStart();
+      consumed = true;
+    }
+  }
+  if (consumed) {
+    e.preventDefault();
+    e.stopPropagation();
+  }
+});
+
 /*
  * search clickables
  */
-function searchAllClickablesInView() {
+function searchClickablesInView() {
   var vpl = 2, vpr = document.documentElement.clientWidth - 2;
   var vpt = 5, vpb = document.documentElement.clientHeight - 5;
   return $('[href],[onclick],iframe,select,button,textarea,input[type][type!="hidden"]', $('body')).filter(function () {
@@ -172,13 +222,6 @@ function searchAllClickablesInView() {
     i.data('contentMarginTopToBorder', ts);
     i.data('contentMarginLeftToBorder', ls);
     return true;
-  }).filter(function(i) {
-    if (i < 36) {
-      return true;
-    }
-    $(this).removeData('contentMarginTopToBorder');
-    $(this).removeData('contentMarginLeftToBorder');
-    return false;
   });
 }
 
@@ -245,7 +288,9 @@ var removeShortcuts = (function () {
  */
 (function () {
   function onViewportChange(e) {
-    toStart();
+    if (!internalClicking) {
+      toStart();
+    }
   }
 
   $(window).scroll(onViewportChange);
