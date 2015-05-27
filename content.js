@@ -4,34 +4,33 @@
 
 var ID_EXTENSION = chrome.i18n.getMessage('@@extension_id');
 
-function isModifierKey(k) {
-  return k == KeyEvent.DOM_VK_SHIFT || k == KeyEvent.DOM_VK_ALT || k == KeyEvent.DOM_VK_CONTROL || k == KeyEvent.DOM_VK_META;
+function isKeyModifier(k) {
+  return (k == KeyEvent.DOM_VK_SHIFT
+      || k == KeyEvent.DOM_VK_ALT
+      || k == KeyEvent.DOM_VK_CONTROL
+      || k == KeyEvent.DOM_VK_META);
 }
 
 /*
  * key click event
  */
 (function () {
-  var lastKeyStroke;
+  var lastKeyDown;
+
   $(window).keydown(function (e) {
-    if ((!e.originalEvent || !e.originalEvent.repeat)
-        && (!lastKeyStroke || isModifierKey(lastKeyStroke.which) || !isModifierKey(e.which))) {
-      lastKeyStroke = e;
-    }
+    lastKeyDown = e;
   });
+
   $(window).keyup(function (e) {
-    if (lastKeyStroke) {
-      var ec = lastKeyStroke;
-      lastKeyStroke = undefined;
-      if (ec.which == e.which
-          && (e.which == KeyEvent.DOM_VK_CONTROL || ec.ctrlKey == e.ctrlKey)
-          && (e.which == KeyEvent.DOM_VK_ALT || ec.altKey == e.altKey)
-          && (e.which == KeyEvent.DOM_VK_META || ec.metaKey == e.metaKey)
-          && (e.which == KeyEvent.DOM_VK_SHIFT || ec.shiftKey == e.shiftKey)) {
-        ec.type = 'keyclick';
-        delete ec.originalEvent;
-        $(window).trigger(ec);
-      }
+    if (lastKeyDown && !lastKeyDown.originalEvent.repeat
+      && lastKeyDown.which == e.which
+      && (lastKeyDown.ctrlKey == e.ctrlKey || e.which == KeyEvent.DOM_VK_CONTROL)
+      && (lastKeyDown.altKey == e.altKey || e.which == KeyEvent.DOM_VK_ALT)
+      && (lastKeyDown.metaKey == e.metaKey || e.which == KeyEvent.DOM_VK_META)
+      && (lastKeyDown.shiftKey == e.shiftKey || e.which == KeyEvent.DOM_VK_SHIFT)) {
+      lastKeyDown.type = 'keyclick';
+      delete lastKeyDown.originalEvent;
+      $(window).trigger(lastKeyDown);
     }
   });
 })();
@@ -39,6 +38,10 @@ function isModifierKey(k) {
 /*
  * search clickables
  */
+(function () {
+  function findElementsInViewport() {
+  }
+
 function searchClickablesInView() {
   var vpl = 2, vpr = document.documentElement.clientWidth - 2;
   var vpt = 5, vpb = document.documentElement.clientHeight - 5;
@@ -244,7 +247,7 @@ function toShortCutting() {
   }
 
   $('body').keydown(function (e) {
-    if (isModifierKey(e.which)) {
+    if (isKeyModifier(e.which)) {
       return;
     }
     var consumed = false;
