@@ -24,5 +24,9 @@
       "js": ["jquery-2.1.4.min.js","keyevent.js","content.js"],
       "css": ["content.css"]
     }
-  ]
+  ],
+  "background": {
+    "scripts": ["eventPage.js"],
+    "persistent": false
+  }
 }

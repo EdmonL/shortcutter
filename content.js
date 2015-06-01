@@ -4,12 +4,44 @@
 
 var ID_EXTENSION = chrome.i18n.getMessage('@@extension_id');
 
+/*
+ * utilities
+ */
 function isKeyModifier(k) {
   return (k == KeyEvent.DOM_VK_SHIFT
       || k == KeyEvent.DOM_VK_ALT
       || k == KeyEvent.DOM_VK_CONTROL
       || k == KeyEvent.DOM_VK_META);
 }
+
+/*
+ * options
+ */
+var on = false;
+
+(function () {
+  var SS_ON = ID_EXTENSION + '_shortcutter_option_on';
+
+  function applySyncOptions() {
+    if (
+
+    var syncOn = options['SS_ON'];
+    on = (syncOn && syncOn != 'false' ? true : false);
+      //todo: turn it on
+    }
+  }
+
+  if (typeof(Storage) == 'undefined') {
+    chrome.storage.get('SS_ON', applySyncOptions);
+  } else {
+    var ssOn = window.sessionStorage.getItem(SS_ON);
+    if (ssOn == null) {
+      chrome.storage.get('SS_ON', getSyncOptions);
+    } else {
+      on = 
+    }
+  }
+})();
 
 /*
  * key click event
